@@ -1,0 +1,79 @@
+/* Shared camera variables are registered so the browser can interpolate them. Camera, journal and
+   pen all read the same animated values, which keeps them in lock-step if a target changes mid-flight. */
+@property --cam-s { syntax: '<number>'; inherits: true; initial-value: 1; }
+@property --cam-x { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --cam-y { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --tilt-x { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
+@property --tilt-z { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
+@property --pen-x { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --pen-y { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --pen-r { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
+
+:root {
+  --leather-1: #7a4a28;
+  --leather-2: #5a3319;
+  --leather-3: #33200f;
+  --leather-4: #1f1209;
+  --gold: #e1bf6e;
+  --gold-dim: #b8934a;
+  --paper: #f5e9cd;
+  --paper-2: #ead9b4;
+  --ink: #3a2a1c;
+  --ink-soft: #7d6446;
+  --wine: #7a2a22;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', 'Hoefler Text', Georgia, 'Times New Roman', serif;
+  --cam-ease: cubic-bezier(0.55, 0.05, 0.2, 1);
+  --flip-ease: cubic-bezier(0.5, 0.05, 0.25, 1);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+html, body { overscroll-behavior: none; overflow: hidden; }
+
+body {
+  background: #1f1209;
+  color: var(--paper);
+  font-family: var(--serif);
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: default; }
+
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.btn-primary {
+  min-height: 56px; padding: 0 2.2rem; border-radius: 999px; border: 1px solid #f6dc9a;
+  background: linear-gradient(180deg, #f1d58d, #c99a3c 60%, #a9792a);
+  color: #2a1608; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.04em;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s;
+}
+.btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(1px) scale(0.99); }
+
+.btn-ghost, .btn-turn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  min-height: 48px; min-width: 48px; padding: 0 1rem; border-radius: 999px;
+  border: 1px solid rgba(245, 233, 205, 0.28); background: rgba(31, 18, 9, 0.62);
+  color: var(--paper); font-size: 1rem; letter-spacing: 0.03em;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: background 0.2s, opacity 0.2s, transform 0.2s;
+}
+.btn-ghost:hover, .btn-turn:hover:not(:disabled) { background: rgba(70, 42, 20, 0.82); }
+.btn-turn:active:not(:disabled) { transform: scale(0.96); }
+.btn-turn:disabled { opacity: 0.35; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
