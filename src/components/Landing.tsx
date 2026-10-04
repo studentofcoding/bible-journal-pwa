@@ -1,13 +1,17 @@
 import type { Verse } from '../lib/verses';
+import type { MotionMode } from '../lib/motion';
+import { MotionToggle } from './MotionToggle';
 
 interface LandingProps {
   visible: boolean;
   verse: Verse;
   onOpen: () => void;
+  motion: MotionMode;
+  onToggleMotion: () => void;
 }
 
 /** Landing copy + call to action. Positioned in the margin the camera leaves free (see --safe-* vars). */
-export function Landing({ visible, verse, onOpen }: LandingProps) {
+export function Landing({ visible, verse, onOpen, motion, onToggleMotion }: LandingProps) {
   return (
     <section className="landing" data-visible={visible} aria-hidden={!visible} inert={!visible}>
       <div className="landing-copy">
@@ -23,6 +27,7 @@ export function Landing({ visible, verse, onOpen }: LandingProps) {
       <div className="landing-action">
         <button type="button" className="btn-primary" onClick={onOpen}>Open journal</button>
         <p className="hint">Works offline · saved on this device</p>
+        <MotionToggle mode={motion} onToggle={onToggleMotion} />
       </div>
     </section>
   );

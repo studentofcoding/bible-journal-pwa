@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import type { CamState } from '../lib/rig';
 
 /**
  * Camera model
@@ -7,9 +8,10 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
  * 3:2 box (two 600x800 pages) whose centre is the world origin; the closed cover occupies the
  * right half (x: 0..600). The camera is nothing more than three numbers (scale, x, y) plus a
  * book tilt and a pen pose. They are derived from (scene, breakpoint, page mode, caret) and
- * published as CSS custom properties on the stage. Camera, journal, pen and page-flip all
- * read those same variables (registered with @property so they interpolate), which is what
- * keeps them coordinated while any of them is mid-transition.
+ * handed to the CameraRig (src/lib/rig.ts), which interpolates ONE state object in a rAF loop and
+ * writes it straight to the camera / tilt / pen transforms (no React renders, no CSS-variable
+ * transitions - those are unreliable on iOS Safari). Camera, journal tilt and pen therefore share
+ * exactly the same animated numbers.
  */
 
 export const PAGE_W = 600;
@@ -257,52 +259,46 @@ function useViewportSize() {
 
 export const SCENE_MS: Record<Scene, number> = { landing: 1100, opening: 1500, writing: 1200 };
 export const FLIP_MS = 900;
-const RESIZE_MS = 240;
+export const COVER_MS = SCENE_MS.opening - 100;
+export const RESIZE_MS = 240;
 
 export interface UseCamera extends ReturnType<typeof computeCamera> {
+  /** Static (non-animated) CSS variables + stage size. */
   vars: CSSProperties;
-  reduced: boolean;
   size: { w: number; h: number; top: number };
-  flipMs: number;
-  coverMs: number;
-  /** true for the single render in which the page mode changed (leaf transitions are muted for it). */
-  modeChanged: boolean;
+  /** Animated camera state in screen/world numbers, ready for CameraRig. */
+  target: CamState;
 }
 
-export function useCamera(scene: Scene, page: number, caretY: number): UseCamera {
+/**
+ * `gentle` motion skips the intermediate "opening" camera stop (a big sweep) and goes straight to the
+ * close-up, so only a short, small zoom remains.
+ */
+export function useCamera(scene: Scene, page: number, caretY: number, gentle: boolean): UseCamera {
   const size = useViewportSize();
-  const reduced = useMedia('(prefers-reduced-motion: reduce)');
   const isPhone = useMedia('(max-width: 639px)');
   const isTablet = useMedia('(max-width: 1023px)');
   const isShortLandscape = useMedia('(orientation: landscape) and (max-height: 499px) and (max-width: 999px)');
   const bp: Breakpoint = isShortLandscape ? 'phoneLandscape' : isPhone ? 'phone' : isTablet ? 'tablet' : 'desktop';
 
-  const cam = useMemo(() => computeCamera({ vw: size.w, vh: size.h, bp, scene, page, caretY }), [size.w, size.h, bp, scene, page, caretY]);
+  const camScene: Scene = gentle && scene === 'opening' ? 'writing' : scene;
+  const cam = useMemo(() => computeCamera({ vw: size.w, vh: size.h, bp, scene: camScene, page, caretY }), [size.w, size.h, bp, camScene, page, caretY]);
 
-  // Scene changes get their choreographed duration; anything else (resize, rotation, caret follow,
-  // page change) uses a short one so the shared variables simply retarget mid-flight.
-  const prevScene = useRef(scene);
-  const prevMode = useRef(cam.mode);
-  const sceneChanged = prevScene.current !== scene;
-  const modeChanged = prevMode.current !== cam.mode;
-  useEffect(() => { prevScene.current = scene; prevMode.current = cam.mode; });
-
-  const camMs = reduced ? 1 : sceneChanged ? SCENE_MS[scene] : RESIZE_MS + (scene === 'writing' ? 160 : 0);
-  const flipMs = reduced ? 1 : modeChanged ? 0 : FLIP_MS;
-  const coverMs = reduced ? 1 : modeChanged ? 0 : SCENE_MS.opening - 100;
+  // The camera anchor is the stage's top-left corner and the viewport centre is folded into x / y, so a
+  // viewport change (rotation, on-screen keyboard) is just another retarget of the same tween: nothing
+  // jumps when the stage resizes.
+  const target: CamState = useMemo(() => ({
+    s: cam.scale,
+    x: size.w / 2 + cam.x,
+    y: size.h / 2 + cam.y,
+    tx: cam.tiltX,
+    tz: cam.tiltZ,
+    px: cam.pen.x,
+    py: cam.pen.y,
+    pr: cam.pen.rot
+  }), [cam, size.w, size.h]);
 
   const vars = {
-    '--cam-s': cam.scale,
-    '--cam-x': px(cam.x),
-    '--cam-y': px(cam.y),
-    '--tilt-x': `${cam.tiltX}deg`,
-    '--tilt-z': `${cam.tiltZ}deg`,
-    '--pen-x': px(cam.pen.x),
-    '--pen-y': px(cam.pen.y),
-    '--pen-r': `${cam.pen.rot}deg`,
-    '--cam-ms': `${camMs}ms`,
-    '--flip-ms': `${flipMs}ms`,
-    '--cover-ms': `${coverMs}ms`,
     '--page-fs': px(cam.fontPx),
     '--page-lh': px(cam.lineHeight),
     '--safe-l': px(cam.insets.l),
@@ -314,5 +310,5 @@ export function useCamera(scene: Scene, page: number, caretY: number): UseCamera
     top: size.top
   } as CSSProperties;
 
-  return { ...cam, vars, reduced, size, flipMs, coverMs, modeChanged };
+  return { ...cam, vars, size, target };
 }

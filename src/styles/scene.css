@@ -1,30 +1,22 @@
 /* ---------- stage + camera ---------- */
 .stage {
-  position: fixed; left: 0; top: 0; overflow: hidden; overflow: clip; /* clip: never scrollable, even by focus/caret reveal */
+  position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; overflow: hidden; overflow: clip;
+  /* width/height/top are overridden inline from visualViewport (keyboard) */ /* clip: never scrollable, even by focus/caret reveal */
   background: #2a1a10;
   touch-action: pan-y pinch-zoom;
+  -webkit-touch-callout: none;
   user-select: none; -webkit-user-select: none;
-  transition:
-    --cam-s var(--cam-ms) var(--cam-ease),
-    --cam-x var(--cam-ms) var(--cam-ease),
-    --cam-y var(--cam-ms) var(--cam-ease),
-    --tilt-x var(--cam-ms) var(--cam-ease),
-    --tilt-z var(--cam-ms) var(--cam-ease),
-    --pen-x var(--cam-ms) var(--cam-ease),
-    --pen-y var(--cam-ms) var(--cam-ease),
-    --pen-r var(--cam-ms) var(--cam-ease);
 }
 .stage textarea, .stage input { user-select: text; -webkit-user-select: text; touch-action: pan-y pinch-zoom; }
 
-/* The camera anchor sits at the viewport centre; world coordinates are design px around the book's centre. */
+/* The camera anchor is the stage's top-left; CameraRig folds the viewport centre into its translate. World coordinates are design px around the book's centre. */
 .camera {
-  position: absolute; left: 50%; top: 50%; width: 0; height: 0;
-  transform-origin: 0 0;
-  transform: translate(var(--cam-x), var(--cam-y)) scale(var(--cam-s));
+  position: absolute; left: 0; top: 0; width: 0; height: 0;
+  transform-origin: 0 0; /* transform is written by CameraRig: translate3d(screen x, y) scale(zoom) */
 }
 .tilt {
   position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0;
-  transform: perspective(2600px) rotateX(var(--tilt-x)) rotateZ(var(--tilt-z));
+  -webkit-transform-style: flat; /* transform: CameraRig */
 }
 
 /* ---------- desk ---------- */
@@ -60,11 +52,13 @@
 .pen {
   position: absolute; left: 0; top: 0; width: 372px; height: 32px; margin-top: -16px;
   transform-origin: 0 50%;
-  transform: translate(var(--pen-x), var(--pen-y)) rotate(var(--pen-r));
   pointer-events: none; z-index: 2000;
 }
-.pen-svg { display: block; overflow: visible; filter: drop-shadow(5px 9px 6px rgba(0, 0, 0, 0.5)); transform-origin: 0 50%; }
+.pen-svg { display: block; overflow: visible; transform-origin: 0 50%; } /* transform: CameraRig (pose) */
 .pen[data-writing='true'] .pen-svg { animation: scribble 0.3s ease-in-out infinite; }
+/* gentle motion: a slower, much smaller scribble */
+.stage[data-motion='gentle'] .pen[data-writing='true'] .pen-svg { animation-name: scribble-soft; animation-duration: 0.6s; }
+@keyframes scribble-soft { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-1.5px, 1px); } }
 @keyframes scribble {
   0%, 100% { transform: translate(0, 0) rotate(0deg); }
   25% { transform: translate(-3px, 2px) rotate(-1.4deg); }
@@ -76,7 +70,7 @@
 .landing {
   position: absolute; z-index: 5; display: flex; flex-direction: column;
   color: var(--paper); text-shadow: 0 2px 12px rgba(0, 0, 0, 0.65);
-  transition: opacity 0.6s ease, transform 0.8s var(--cam-ease);
+  transition: opacity calc(0.6s * var(--mk)) ease, transform calc(0.8s * var(--mk)) var(--cam-ease);
   pointer-events: none; /* lets the cover itself be tapped to open */
 }
 .landing .btn-primary { pointer-events: auto; }
@@ -86,8 +80,7 @@
 .landing .tagline { margin: 0.7rem 0 0; font-size: 1.15rem; font-style: italic; color: #ecdcb8; }
 .votd {
   margin: 1.6rem 0 0; padding: 1rem 1.2rem; max-width: 30rem; border-left: 3px solid var(--gold);
-  background: rgba(31, 18, 9, 0.45); border-radius: 0 10px 10px 0;
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  background: rgba(31, 18, 9, 0.62); border-radius: 0 10px 10px 0;
 }
 .votd figcaption { font-size: 0.82rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
 .votd blockquote { margin: 0.35rem 0 0.4rem; font-size: 1.1rem; line-height: 1.45; font-style: italic; }
@@ -114,6 +107,7 @@
 .stage[data-bp='phone'] .votd { margin-top: 0.7rem; padding: 0.55rem 0.9rem; }
 .stage[data-bp='phone'] .votd blockquote { font-size: 1rem; line-height: 1.35; margin: 0.2rem 0 0.25rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .stage[data-bp='phone'] .landing .hint { font-size: 0.85rem; }
+.stage[data-bp='phone'] .landing-action { gap: 0.55rem; }
 .stage[data-bp='phoneLandscape'] .landing h1 { font-size: 2rem; }
 .stage[data-bp='phoneLandscape'] .landing .eyebrow { margin-bottom: 0.2rem; font-size: 0.8rem; }
 .stage[data-bp='phoneLandscape'] .landing .tagline { margin-top: 0.3rem; font-size: 1rem; }
@@ -130,7 +124,7 @@
 }
 
 /* ---------- writing HUD ---------- */
-.hud { position: absolute; inset: 0; z-index: 6; pointer-events: none; transition: opacity 0.6s ease 0.3s; }
+.hud { position: absolute; inset: 0; z-index: 6; pointer-events: none; transition: opacity calc(0.6s * var(--mk)) ease calc(0.3s * var(--mk)); }
 .hud[data-visible='false'] { opacity: 0; transition-delay: 0s; transition-duration: 0.25s; }
 .hud button { pointer-events: auto; }
 .hud-top, .hud-bottom {
@@ -141,6 +135,8 @@
 .hud-top { top: 0; height: 64px; padding-top: env(safe-area-inset-top, 0px); background: linear-gradient(to bottom, rgba(20, 10, 4, 0.94) 65%, rgba(20, 10, 4, 0)); }
 .hud-bottom { bottom: 0; height: 104px; padding-bottom: env(safe-area-inset-bottom, 0px); background: linear-gradient(to top, rgba(20, 10, 4, 0.94) 65%, rgba(20, 10, 4, 0)); }
 .hud-status { margin: 0; font-size: 1.05rem; letter-spacing: 0.06em; color: var(--paper); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7); text-align: center; flex: 1; }
+.hud-center { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.35rem; }
+.hud-center .hud-hint { flex: none; }
 .hud-hint { margin: 0; font-size: 0.9rem; color: #cdb88d; text-align: center; flex: 1; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7); }
 .btn-turn { min-width: 112px; font-size: 1.1rem; }
 
@@ -154,5 +150,27 @@
 .stage[data-bp='phoneLandscape'] .hud-top .btn-ghost { min-height: 40px; padding: 0 0.8rem; }
 .stage[data-bp='phoneLandscape'] .hud-bottom { top: 44px; bottom: 0; height: auto; background: none; padding: 0 12px; }
 .stage[data-bp='phoneLandscape'] .hud-hint { display: none; }
+.stage[data-bp='phoneLandscape'] .hud-center { display: none; }
 .stage[data-bp='phoneLandscape'] .btn-turn { min-width: 60px; min-height: 60px; padding: 0; border-radius: 18px; }
 .stage[data-bp='phoneLandscape'] .btn-turn span { display: none; }
+
+/* ---------- landing atmosphere (full motion only): a slow light shaft + drifting dust. opacity / transform only ---------- */
+.atmos { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; opacity: 0; transition: opacity 0.7s ease; }
+.stage[data-scene='landing'][data-motion='full'] .atmos { opacity: 1; }
+.shaft {
+  position: absolute; left: -10%; top: -20%; width: 70%; height: 140%; transform-origin: 20% 0;
+  background: linear-gradient(115deg, rgba(255, 214, 150, 0.0) 20%, rgba(255, 214, 150, 0.12) 45%, rgba(255, 214, 150, 0) 70%);
+  animation: shaft 9s ease-in-out infinite;
+}
+@keyframes shaft { 0%, 100% { opacity: 0.55; transform: rotate(-2deg); } 50% { opacity: 1; transform: rotate(2deg); } }
+.mote {
+  position: absolute; border-radius: 50%; background: rgba(255, 228, 175, 0.85); opacity: 0;
+  animation: mote 12s linear infinite;
+}
+@keyframes mote {
+  0% { opacity: 0; transform: translate3d(0, 0, 0); }
+  20% { opacity: 0.7; }
+  80% { opacity: 0.5; }
+  100% { opacity: 0; transform: translate3d(26px, -70px, 0); }
+}
+.stage:not([data-scene='landing']) .shaft, .stage:not([data-scene='landing']) .mote { animation-play-state: paused; }

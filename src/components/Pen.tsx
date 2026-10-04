@@ -1,17 +1,19 @@
+import type { Ref } from 'react';
+
 interface PenProps {
+  penRef?: Ref<HTMLDivElement>;
   /** True while the user is typing: the nib scribbles. */
   writing: boolean;
 }
 
 /**
  * A fountain pen drawn in SVG. Its nib sits at the element origin and the barrel extends along +x,
- * so `translate(var(--pen-x), var(--pen-y)) rotate(var(--pen-r))` places the *tip* in world space.
- * The pose variables come from the camera, so the pen travels with the same easing and duration as
- * the camera and journal.
+ * so `translate(x, y) rotate(r)` places the *tip* in world space. The CameraRig writes that transform every
+ * frame, so the pen travels with exactly the same easing and duration as the camera and journal.
  */
-export function Pen({ writing }: PenProps) {
+export function Pen({ writing, penRef }: PenProps) {
   return (
-    <div className="pen" data-writing={writing} aria-hidden="true">
+    <div className="pen" ref={penRef} data-writing={writing} aria-hidden="true">
       <svg className="pen-svg" viewBox="0 -16 372 32" width="372" height="32">
         <defs>
           <linearGradient id="pen-barrel" x1="0" y1="-1" x2="0" y2="1">
@@ -29,6 +31,13 @@ export function Pen({ writing }: PenProps) {
             <stop offset="1" stopColor="#8a6420" />
           </linearGradient>
         </defs>
+        {/* pre-rendered cast shadow (a static shape; replaces a per-frame CSS drop-shadow filter) */}
+        <g transform="translate(5 9)" fill="#000" opacity=".3">
+          <path d="M0 0 L46 -7.5 Q52 -8 52 0 Q52 8 46 7.5 Z" />
+          <rect x="52" y="-9" width="64" height="18" />
+          <rect x="116" y="-12" width="232" height="24" rx="11" />
+          <path d="M346 -11 Q372 -11 372 0 Q372 11 346 11 Z" />
+        </g>
         <g className="pen-body">
           {/* nib */}
           <path d="M0 0 L46 -7.5 Q52 -8 52 0 Q52 8 46 7.5 Z" fill="url(#pen-gold)" stroke="#6b4c18" strokeWidth=".8" />

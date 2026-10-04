@@ -1,13 +1,5 @@
-/* Shared camera variables are registered so the browser can interpolate them. Camera, journal and
-   pen all read the same animated values, which keeps them in lock-step if a target changes mid-flight. */
-@property --cam-s { syntax: '<number>'; inherits: true; initial-value: 1; }
-@property --cam-x { syntax: '<length>'; inherits: true; initial-value: 0px; }
-@property --cam-y { syntax: '<length>'; inherits: true; initial-value: 0px; }
-@property --tilt-x { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
-@property --tilt-z { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
-@property --pen-x { syntax: '<length>'; inherits: true; initial-value: 0px; }
-@property --pen-y { syntax: '<length>'; inherits: true; initial-value: 0px; }
-@property --pen-r { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
+/* Motion is driven by JS (src/lib/rig.ts, src/lib/leaves.ts): transforms are written directly each frame. No
+   CSS-variable transitions / @property - Safari handles those poorly. `--mk` scales remaining CSS durations. */
 
 :root {
   --leather-1: #7a4a28;
@@ -22,14 +14,16 @@
   --ink-soft: #7d6446;
   --wine: #7a2a22;
   --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', 'Hoefler Text', Georgia, 'Times New Roman', serif;
-  --cam-ease: cubic-bezier(0.55, 0.05, 0.2, 1);
-  --flip-ease: cubic-bezier(0.5, 0.05, 0.25, 1);
+  --cam-ease: cubic-bezier(0.45, 0.05, 0.2, 1);
+  --paper-ease: cubic-bezier(0.22, 0.8, 0.2, 1);
+  --mk: 1;
   color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body, #root { height: 100%; margin: 0; }
+@supports (height: 100dvh) { html, body, #root { height: 100dvh; } }
 html, body { overscroll-behavior: none; overflow: hidden; }
 
 body {
@@ -57,23 +51,29 @@ button:disabled { cursor: default; }
   background: linear-gradient(180deg, #f1d58d, #c99a3c 60%, #a9792a);
   color: #2a1608; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.04em;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s;
+  transition: transform 0.2s ease;
 }
-.btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn-primary:hover { transform: translateY(-1px); }
 .btn-primary:active { transform: translateY(1px) scale(0.99); }
 
 .btn-ghost, .btn-turn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
   min-height: 48px; min-width: 48px; padding: 0 1rem; border-radius: 999px;
-  border: 1px solid rgba(245, 233, 205, 0.28); background: rgba(31, 18, 9, 0.62);
+  border: 1px solid rgba(245, 233, 205, 0.28); background: rgba(31, 18, 9, 0.78);
   color: var(--paper); font-size: 1rem; letter-spacing: 0.03em;
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  transition: background 0.2s, opacity 0.2s, transform 0.2s;
+    transition: opacity 0.2s, transform 0.2s;
 }
 .btn-ghost:hover, .btn-turn:hover:not(:disabled) { background: rgba(70, 42, 20, 0.82); }
 .btn-turn:active:not(:disabled) { transform: scale(0.96); }
 .btn-turn:disabled { opacity: 0.35; }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+.motion-toggle {
+  min-height: 34px; padding: 0 0.85rem; border-radius: 999px; font-size: 0.82rem; letter-spacing: 0.04em;
+  border: 1px solid rgba(245, 233, 205, 0.22); background: rgba(31, 18, 9, 0.7); color: #d9c8a3;
+  pointer-events: auto; position: relative;
 }
+.motion-toggle::after { content: ''; position: absolute; inset: -6px -4px; } /* 44px-ish hit area */
+.motion-toggle b { font-weight: 700; color: var(--gold); }
+
+/* 'Motion: reduced' (gentle) is still animated - just shorter. Only decoration is dropped. */
+.stage[data-motion='gentle'] { --mk: 0.45; }

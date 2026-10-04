@@ -3,13 +3,13 @@
 
 .book {
   position: absolute; left: -600px; top: -400px; width: 1200px; aspect-ratio: 3 / 2;
-  perspective: 3200px; font-family: var(--serif);
+  perspective: 3200px; -webkit-perspective: 3200px; font-family: var(--serif);
 }
 
 .shadow { position: absolute; top: 14px; height: 100%; width: 50%; border-radius: 8px; background: rgba(0, 0, 0, 0.45); box-shadow: 0 40px 70px 20px rgba(0, 0, 0, 0.5); z-index: 0; }
 .shadow-right { left: 50%; }
-.shadow-left { left: 0; opacity: 0; transition: opacity 0.3s ease; }
-.journal[data-open='true'] .shadow-left { opacity: 1; transition-delay: calc(var(--cover-ms) * 0.5); }
+.shadow-left { left: 0; opacity: 0; transition: opacity calc(0.3s * var(--mk)) ease; } /* pre-rendered shadow: only its opacity fades */
+.journal[data-open='true'] .shadow-left { opacity: 1; } /* delay set inline from the cover duration */
 
 .back-board {
   position: absolute; left: 50%; top: -10px; width: calc(50% + 12px); height: calc(100% + 20px); z-index: 1;
@@ -31,19 +31,17 @@
 /* ---------- leaves ---------- */
 .leaf {
   position: absolute; left: 50%; top: 0; width: 50%; height: 100%;
-  transform-origin: left center; transform-style: preserve-3d;
-  transform: rotateY(calc(var(--flip) * -180deg));
-  transition: transform var(--flip-ms) var(--flip-ease);
+  transform-origin: left center; transform-style: preserve-3d; -webkit-transform-style: preserve-3d;
+  /* transform + z-index are written per frame by LeafMotion (src/lib/leaves.ts) */
 }
-.leaf.cover { top: -10px; height: calc(100% + 20px); width: calc(50% + 12px); transition-duration: var(--cover-ms); transition-timing-function: var(--cam-ease); }
+.leaf.cover { top: -10px; height: calc(100% + 20px); width: calc(50% + 12px); }
 
 .face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-.face.back { transform: rotateY(180deg); }
-.face::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; }
-.face.front::after { background: linear-gradient(to right, rgba(40, 20, 5, 0), rgba(40, 20, 5, 0.5)); }
-.face.back::after { background: linear-gradient(to left, rgba(40, 20, 5, 0), rgba(40, 20, 5, 0.5)); }
-.leaf.moving .face::after { animation: shade var(--flip-ms) ease-in-out; }
-@keyframes shade { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+.face.back { transform: rotateY(180deg); -webkit-transform: rotateY(180deg); }
+/* shading overlay: opacity is set per frame from the flip angle (strongest at 90deg) */
+.shade { position: absolute; inset: 0; pointer-events: none; opacity: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.face.front > .shade { background: linear-gradient(to right, rgba(40, 20, 5, 0), rgba(40, 20, 5, 0.55)); }
+.face.back > .shade { background: linear-gradient(to left, rgba(40, 20, 5, 0), rgba(40, 20, 5, 0.55)); }
 
 /* ---------- pages ---------- */
 .page {

@@ -2,8 +2,8 @@
 
 A small, offline-first Bible study journal. A closed leather journal sits on a desk beside a pen; tap
 **Open journal**, the cover swings open while the camera pulls in, and you land in a close-up writing view where
-each page is one entry (scripture reference + lined reflection). Pages turn with a 3D flip (buttons, swipe, arrow
-keys). Everything is pure CSS/SVG — no images, no network, no external fonts.
+each page is one entry (scripture reference + lined reflection). Pages turn with a 3D flip (buttons, arrow keys, or
+**drag the page with your finger**). Everything is pure CSS/SVG — no images, no network, no external fonts.
 
 * React 19 + Vite + TypeScript, `vite-plugin-pwa` (Workbox) — nothing else at runtime (no animation library).
 * Entries live in `localStorage` (`bible-journal:v1`). One page per entry, **New page** appends one.
@@ -29,23 +29,28 @@ npm run preview      # serves dist/ at http://localhost:4173 (installable, works
 | Action | Input |
 | --- | --- |
 | Open / close | **Open journal** button or tap the cover · **Close** (top-left) |
-| Turn page | **Prev / Next** buttons · horizontal swipe · `←` `→` (use `Alt+←` / `Alt+→` while the caret is in a text field) |
+| Turn page | **Prev / Next** buttons · drag the page horizontally (follows the finger; release past halfway or with a flick to finish, otherwise it springs back) · `←` `→` (use `Alt+←` / `Alt+→` while the caret is in a text field) |
 | New page | **New page** (top-right) or the "Begin a new page" button on the blank page after the last entry |
+| Motion | **Motion: full / reduced** pill (landing screen, and between Prev/Next while writing). Persisted in `localStorage` (`bible-journal:motion`) |
 
 ## Code map
 
 ```
 src/
   App.tsx                 scene state machine (landing → opening → writing), page navigation, wiring
-  hooks/useCamera.ts      the camera model: frames per scene × breakpoint → CSS variables
+  hooks/useCamera.ts      the camera model: frames per scene × breakpoint → one target state for the rig
+  hooks/useMotion.ts      'full' | 'gentle' preference (localStorage, OS default)
+  lib/rig.ts              CameraRig: rAF tween of one camera state → transforms on .camera / .tilt / .pen (+ idle float)
+  lib/leaves.ts           LeafMotion: per-leaf progress 0..1 → rotateY/lift/shade; shared by animation and finger drag
+  lib/motion.ts           motion mode helpers, cubic-bezier easing
   hooks/useJournalStore.ts entries + persistence (localStorage, debounced, flushed on pagehide)
-  hooks/usePageNav.ts     keyboard arrows + swipe
+  hooks/usePageNav.ts     keyboard arrows + interactive drag-to-turn (pointer events)
   components/Landing.tsx  title, verse of the day, "Open journal" (sits in the margin the camera leaves free)
-  components/Journal.tsx  the book: cover + leaves, 3D hinge/flip, z-ordering, single/spread page mapping
+  components/Journal.tsx  the book: cover + leaves, 3D hinge/flip targets, single/spread page mapping, TurnApi for drags
   components/Page.tsx     one lined page: reference input, KJV quote, textarea, caret measurement
   components/Pen.tsx      SVG fountain pen (nib at the origin so the pose variables place the *tip*)
   components/Cover.tsx    leather cover front and the inside-cover endpaper
-  components/Hud.tsx      close / page indicator / new page / prev / next
+  components/Hud.tsx      close / page indicator / new page / prev / next / motion toggle
   lib/verses.ts           KJV verse list, verse of the day, reference lookup
   styles/                 global (tokens, @property), scene (stage, camera, desk, landing, HUD), journal (book, pages)
 ```
@@ -58,16 +63,16 @@ cover is simply the right half of that box (x 0…600). Nothing is ever restyled
 journal never stretches, it is only seen through a different camera.
 
 The camera is a handful of numbers computed in `computeCamera()` (`useCamera.ts`) from
-`(scene, breakpoint, active page, caret)` and published as CSS custom properties on the stage:
+`(scene, breakpoint, active page, caret)` and handed to the `CameraRig` (`lib/rig.ts`) as one state object:
 
-| variable | meaning | consumed by |
+| field | meaning | written to |
 | --- | --- | --- |
-| `--cam-s`, `--cam-x`, `--cam-y` | scale and translate of the camera | `.camera` (`translate() scale()`) |
-| `--tilt-x`, `--tilt-z` | desk-view tilt of the book | `.tilt` (`perspective() rotateX() rotateZ()`) |
-| `--pen-x`, `--pen-y`, `--pen-r` | pen tip position + angle in *world* space | `.pen` |
-| `--cam-ms`, `--flip-ms`, `--cover-ms` | shared durations | stage transition, leaf flip, cover swing |
-| `--page-fs`, `--page-lh` | page font size / line height (design px) | every page, textarea ruled lines |
-| `--safe-*` | screen margins reserved for copy/HUD | landing copy placement |
+| `s`, `x`, `y` | zoom and screen translate (the viewport centre is folded into x / y) | `.camera`: `translate3d() scale()` |
+| `tx`, `tz` | desk-view tilt of the book | `.tilt`: `translate3d() perspective() rotateX() rotateZ()` |
+| `px`, `py`, `pr` | pen tip position + angle in *world* space (+ flip "lift") | `.pen`: `translate3d() rotate() scale()` |
+
+Static (not animated) CSS variables remain for layout: `--page-fs`, `--page-lh` (page font size / line height, design
+px) and `--safe-*` (screen margins reserved for landing copy / HUD).
 
 A frame is "fit this **world rectangle** into this **safe screen rectangle**": `scale = min(safeW / focusW,
 safeH / focusH)` and the translate puts the focus centre at the safe-rect centre. Every number in the table below is
@@ -102,20 +107,43 @@ away through the area the camera has cropped off. Because the camera, not the DO
 see, resizing across a breakpoint keeps the same entry open (`page` is the single source of truth; the number of
 flipped leaves is derived from it and the mode).
 
-### Keeping camera, journal, pen and flip in step
+### Motion engine (why it animates on phones)
 
-* The camera variables are registered with `@property` (`global.css`) and transitioned on `.stage` with a shared
-  duration/easing. Children inherit the *interpolated* values, so the camera, the book tilt and the pen's pose are
-  literally the same animated numbers, not four separately timed animations.
-* Scene changes use choreographed durations (`SCENE_MS`: opening 1.5 s, close-up 1.2 s, landing 1.1 s); the cover
-  swing uses the same 1.4 s curve so it finishes with the camera move. Anything else (resize, rotation, breakpoint
-  change, caret follow, switching page) retargets the same variables with a short 240 ms duration, so a rotation
-  mid-animation simply bends the running transitions toward the new frame.
-* The leaf being turned jumps to the top of the stack for the duration of its flip and gets a shading pass; the
-  cover does the same for its swing. When the page mode changes (e.g. rotation) leaf transitions are muted for that
-  single render so the book re-maps instantly instead of riffling.
-* `prefers-reduced-motion`: durations collapse to ~1 ms (camera, pen, flips, cover), the scribble animation is
-  disabled and the opening goes straight to the writing view.
+The first version animated CSS custom properties registered with `@property` and let every child inherit the
+interpolated values. That is fragile on iOS Safari (variable-driven transitions are unreliable, and every frame
+re-resolves styles for the whole subtree including the textareas), and the `prefers-reduced-motion` rule collapsed
+every duration to ~0 — which most phones with *Reduce Motion* / *Remove animations* then reported, so the whole
+choreography vanished. Now:
+
+* **One camera state, one rAF loop.** `CameraRig` interpolates `{s, x, y, tilt, pen}` with a cubic-bezier and writes
+  plain `transform`s. Retargeting (rotation, keyboard, caret follow, a scene change in the middle of another) starts
+  from the *displayed* values, so nothing jumps. No React re-render happens during a move.
+* **Leaves are numbers too.** `LeafMotion` keeps a progress `p ∈ [0, 1]` per leaf (the cover is leaf `cover`) and paints
+  `translate3d(0,0,lift) rotateY(-180·p) scale(1+lift)` plus the opacity of two pre-rendered shading overlays, so a page
+  turn is one continuous 0-180° rotation with a slight mid-flip lift. Button/keyboard turns and finger drags both go
+  through `place(p)` / `animate(p → target)`. Flips and the cover swing share `cubic-bezier(.22,.8,.2,1)`.
+* **Drag to turn.** `usePageNav` uses pointer events (`touch-action: pan-y` on the stage keeps vertical scroll in the
+  textarea). After a 10 px horizontal slop the leaf follows the finger (`distance ≈ 1.5 pages`, ≤ 85 % of the screen).
+  Release commits when `progress + velocity·140 ms > 0.5`, otherwise the leaf animates back. Mouse drags that start
+  inside text are still text selection.
+* **Pen and camera follow the flip**: the pen lifts away (`setLift(sin(π p))`) while a leaf is mid-turn, and the pen
+  pose is part of the same camera tween when the scene changes.
+* **Only transform and opacity animate.** `will-change: transform` is added to the moving layers when a move starts
+  and removed ~150 ms after it ends (so zoomed layers re-rasterise crisply). The pen shadow is a pre-rendered shape,
+  the left-hand book shadow fades its opacity, `backdrop-filter` was removed, and the stage uses `dvh` + `visualViewport`.
+* **Idle life on the landing screen** (full motion only): a slow float of the journal and pen (in the rig, so there is no
+  jump when leaving the scene), a light shaft and a few dust motes (CSS opacity/transform keyframes).
+* Scene durations: opening 1.5 s, close-up 1.2 s, landing 1.1 s, cover 1.4 s, flip 0.9 s; resize/keyboard retargets 0.24-0.4 s.
+
+### Motion: full vs reduced (gentle)
+
+`useMotion` stores `full` or `gentle` in `localStorage['bible-journal:motion']`. With nothing stored it follows
+`prefers-reduced-motion`: *no-preference → full*, *reduce → gentle*. The in-app **Motion: full / reduced** pill always
+wins, so someone whose phone reports "reduce" can still force full motion (and the reverse).
+
+`gentle` keeps the cover opening and the page flip — they are what the app *is* — but shortened to 45 % of the time
+(`GENTLE_K`), with the lift halved, **no intermediate "opening" camera stop** (the camera goes straight from the
+cover to the close-up in one short move instead of a sweep), no idle float/dust, and a small slow pen scribble.
 
 ## PWA
 
@@ -126,7 +154,8 @@ colours and 192/512 px PNG icons plus a maskable icon and an SVG icon; `apple-to
 
 ## Known limitations
 
-* The page flip is a rigid 3D leaf rotation with shading (no paper curl) and is triggered, not drag-interactive.
+* The page flip is a rigid 3D leaf rotation with shading (no paper curl). Dragging works for touch/pen and for mouse drags that start outside text.
+* Motion was verified headlessly (Chrome, emulated iPhone/Pixel/iPad with touch) — not on a physical iOS Safari; frame timings on real hardware will differ.
 * Page text is plain `textarea`s: no rich text, no delete/reorder of pages, no export.
 * Only ~10 hardcoded KJV verses; auto-quoting works for exact reference matches only.
 * In single-page mode on a landscape phone a sliver of the turned pages' blank backs is visible at the left edge.

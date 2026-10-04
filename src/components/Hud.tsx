@@ -1,4 +1,6 @@
 import type { PageMode } from '../hooks/useCamera';
+import type { MotionMode } from '../lib/motion';
+import { MotionToggle } from './MotionToggle';
 
 interface HudProps {
   visible: boolean;
@@ -11,10 +13,12 @@ interface HudProps {
   onNext: () => void;
   onAdd: () => void;
   onClose: () => void;
+  motion: MotionMode;
+  onToggleMotion: () => void;
 }
 
 /** Writing-view controls: close, page indicator, new page, prev/next. */
-export function Hud({ visible, mode, page, total, canPrev, canNext, onPrev, onNext, onAdd, onClose }: HudProps) {
+export function Hud({ visible, mode, page, total, canPrev, canNext, onPrev, onNext, onAdd, onClose, motion, onToggleMotion }: HudProps) {
   const label = mode === 'spread'
     ? (() => {
         const left = page % 2 === 1 ? page : page - 1; // entry index of the left page (may be -1)
@@ -41,7 +45,10 @@ export function Hud({ visible, mode, page, total, canPrev, canNext, onPrev, onNe
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
           <span>Prev</span>
         </button>
-        <p className="hud-hint">Swipe or press ← → (Alt+← → while typing)</p>
+        <div className="hud-center">
+          <p className="hud-hint">Drag the page, or press ← → (Alt+← → while typing)</p>
+          <MotionToggle mode={motion} onToggle={onToggleMotion} />
+        </div>
         <button type="button" className="btn-turn next" onClick={onNext} disabled={!canNext} aria-label="Next page">
           <span>Next</span>
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
